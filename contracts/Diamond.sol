@@ -22,9 +22,9 @@ contract Diamond {
         address owner;
     }
 
-    constructor(IDiamondCut.FacetCut[] memory _diamondCut, DiamondArgs memory _args) payable {
+    constructor(IDiamondCut.FacetCut[] memory _diamondCut) payable {
         LibDiamond.diamondCut(_diamondCut, address(0), new bytes(0));
-        LibDiamond.setContractOwner(_args.owner);
+        LibDiamond.setContractOwner(address(this));
 
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
 

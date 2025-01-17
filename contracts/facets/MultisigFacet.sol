@@ -15,6 +15,7 @@ contract MultisigFacet {
     event OwnerAddition(address indexed owner);
     event OwnerRemoval(address indexed owner);
     event RequirementChange(uint required);
+    error ErrorTxnotConfirmed(uint transactionId);
 
     modifier onlyWallet() {
         require(msg.sender == address(this), "MultisigFacet: Only wallet can call");
@@ -107,20 +108,21 @@ contract MultisigFacet {
         _executeTransaction(transactionId);
     }
 
-    function _executeTransaction(uint transactionId) internal {
-        if (_isConfirmed(transactionId)) {
-            LibMultisigStorage.Layout storage l = LibMultisigStorage.layout();
-            LibMultisigStorage.Transaction storage txn = l.transactions[transactionId];
-            
-            txn.executed = true;
-            (bool success, ) = txn.destination.call{value: txn.value}(txn.data);
-            
-            if (success) {
-                emit Execution(transactionId);
-            } else {
-                emit ExecutionFailure(transactionId);
-                txn.executed = false;
-            }
+    function _executeTransaction(uint transactionId) internal virtual{
+        if (!_isConfirmed(transactionId)) {
+            revert ErrorTxnotConfirmed(transactionId);
+        }
+        LibMultisigStorage.Layout storage l = LibMultisigStorage.layout();
+        LibMultisigStorage.Transaction storage txn = l.transactions[transactionId];
+        
+        txn.executed = true;
+        (bool success, ) = txn.destination.call{value: txn.value}(txn.data);
+        
+        if (success) {
+            emit Execution(transactionId);
+        } else {
+            emit ExecutionFailure(transactionId);
+            txn.executed = false;
         }
     }
 
