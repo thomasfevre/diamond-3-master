@@ -6,8 +6,6 @@ import "../contracts/Diamond.sol";
 import "../contracts/facets/DiamondCutFacet.sol";
 import "../contracts/facets/DiamondLoupeFacet.sol";
 import "../contracts/facets/OwnershipFacet.sol";
-import "../contracts/facets/Test1Facet.sol";
-import "../contracts/facets/Test2Facet.sol";
 import "../contracts/interfaces/IDiamondCut.sol";
 import "../contracts/interfaces/IDiamondLoupe.sol";
 
@@ -20,8 +18,6 @@ contract DiamondTest is Test {
     DiamondCutFacet diamondCutFacet;
     DiamondLoupeFacet diamondLoupeFacet;
     OwnershipFacet ownershipFacet;
-    Test1Facet test1Facet;
-    Test2Facet test2Facet;
     
     address owner;
     address zeroAddress = address(0);
@@ -35,8 +31,7 @@ contract DiamondTest is Test {
         diamondCutFacet = new DiamondCutFacet();
         diamondLoupeFacet = new DiamondLoupeFacet();
         ownershipFacet = new OwnershipFacet();
-        test1Facet = new Test1Facet();
-        test2Facet = new Test2Facet();
+      
 
         // Initialize Diamond arguments
         Diamond.DiamondArgs memory diamondArgs = Diamond.DiamondArgs({
@@ -65,7 +60,7 @@ contract DiamondTest is Test {
         diamond = new Diamond(diamondCut, diamondArgs);
     }
 
-    function testInitialFacets() public {
+    function testInitialFacets() public view {
         IDiamondLoupe diamondLoupe = IDiamondLoupe(address(diamond));
         address[] memory facetAddresses = diamondLoupe.facetAddresses();
         assertEq(facetAddresses.length, 2);
