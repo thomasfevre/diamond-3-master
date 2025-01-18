@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "../libraries/LibMultisigStorage.sol";
+import "../interfaces/IERC20.sol";
 
 contract MultisigFacet {
     uint constant public MAX_OWNER_COUNT = 50;
@@ -19,16 +20,6 @@ contract MultisigFacet {
 
     modifier onlyWallet() {
         require(msg.sender == address(this), "MultisigFacet: Only wallet can call");
-        _;
-    }
-
-    modifier ownerDoesNotExist(address owner) {
-        require(!LibMultisigStorage.layout().isOwner[owner], "MultisigFacet: Owner already exists");
-        _;
-    }
-
-    modifier ownerExists(address owner) {
-        require(LibMultisigStorage.layout().isOwner[owner], "MultisigFacet: Owner does not exist");
         _;
     }
 
@@ -52,27 +43,14 @@ contract MultisigFacet {
         _;
     }
 
-    modifier validRequirement(uint ownerCount, uint _required) {
-        require(ownerCount <= MAX_OWNER_COUNT 
-            && _required <= ownerCount 
-            && _required != 0 
-            && ownerCount != 0, "MultisigFacet: Invalid requirement");
-        _;
-    }
-
-    function initializeMultisig(address[] memory _owners, uint _required) 
+    function initializeMultisig(address erc20Address, uint _required) 
         external 
-        validRequirement(_owners.length, _required)
     {
         LibMultisigStorage.Layout storage l = LibMultisigStorage.layout();
-            
-        for (uint i = 0; i < _owners.length; i++) {
-            require(!l.isOwner[_owners[i]] && _owners[i] != address(0), "MultisigFacet: Invalid owner");
-            l.isOwner[_owners[i]] = true;
-        }
         
-        l.owners = _owners;
+        require(erc20Address != address(0), "MultisigFacet: Invalid ERC20 address");
         l.required = _required;
+        l.erc20Address = erc20Address;
     }
 
     function submitTransaction(address destination, uint value, bytes memory data)
@@ -85,12 +63,17 @@ contract MultisigFacet {
 
     function confirmTransaction(uint transactionId, bool executeIfReady)
         public
-        ownerExists(msg.sender)
         transactionExists(transactionId)
         notConfirmed(transactionId, msg.sender)
     {
         LibMultisigStorage.Layout storage l = LibMultisigStorage.layout();
-        l.confirmations[transactionId][msg.sender] = true;
+        uint256 balance = IERC20(l.erc20Address).balanceOf(msg.sender); // Check ERC20 balance
+
+        require(balance > 0, "MultisigFacet: Insufficient ERC20 balance to confirm");
+
+        l.confirmations[transactionId][msg.sender] = true; // Add confirmation
+        l.confirmationSigners[transactionId].push(msg.sender);
+        l.confirmationWeights[transactionId][msg.sender] = balance; // Store confirmation weight
         
         emit Confirmation(msg.sender, transactionId);
         
@@ -101,7 +84,6 @@ contract MultisigFacet {
 
     function executeTransaction(uint transactionId)
         public
-        ownerExists(msg.sender)
         transactionExists(transactionId)
         notExecuted(transactionId)
     {        
@@ -128,19 +110,18 @@ contract MultisigFacet {
 
     function _isConfirmed(uint transactionId) internal view returns (bool) {
         LibMultisigStorage.Layout storage l = LibMultisigStorage.layout();
-        uint count = 0;
+        uint256 totalWeight = 0;
+        uint256 totalSupply = IERC20(l.erc20Address).totalSupply(); // Get total supply of ERC20 tokens
         
-        for (uint i = 0; i < l.owners.length; i++) {
-            if (l.confirmations[transactionId][l.owners[i]]) {
-                count++;
-            }
-            
-            if (count == l.required) {
-                return true;
+        for (uint i = 0; i < l.confirmationSigners[transactionId].length ; i++) {
+            address owner = l.confirmationSigners[transactionId][i]; // Assuming owners are stored in the layout
+            if (l.confirmations[transactionId][owner]) {
+                totalWeight += l.confirmationWeights[transactionId][owner]; // Sum confirmation weights
             }
         }
-        
-        return false;
+
+        // Check if the total confirmed weight percentage meets the required threshold
+        return (totalSupply > 0 && (totalWeight * 100) / totalSupply >= l.required);
     }
 
     function _addTransaction(address destination, uint value, bytes memory data)
@@ -166,8 +147,8 @@ contract MultisigFacet {
     }
 
     // Additional view functions can be added here
-    function getOwners() external view returns (address[] memory) {
-        return LibMultisigStorage.layout().owners;
+    function getSigners(uint transactionId) external view returns (address[] memory) {
+        return LibMultisigStorage.layout().confirmationSigners[transactionId];
     }
 
     function getTransactionCount(bool pending, bool executed) external view returns (uint count) {

@@ -111,7 +111,6 @@ contract DiamondCutFacet is MultisigFacet {
 
     function executeDiamondCutProposal(uint proposalId)
         public
-        ownerExists(msg.sender)
     {
         LibDiamondCutStorage.Layout storage l = LibDiamondCutStorage.layout();
         LibDiamondCutStorage.DiamondCutProposalMetadata storage metadata = l.proposals[proposalId];

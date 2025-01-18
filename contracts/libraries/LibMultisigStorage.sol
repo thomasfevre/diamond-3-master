@@ -5,8 +5,9 @@ library LibMultisigStorage {
     struct Layout {
         mapping(uint => Transaction) transactions;
         mapping(uint => mapping(address => bool)) confirmations;
-        mapping(address => bool) isOwner;
-        address[] owners;
+        mapping(uint => mapping(address => uint256)) confirmationWeights;
+        mapping(uint => address[]) confirmationSigners;
+        address erc20Address;
         uint required;
         uint transactionCount;
     }
