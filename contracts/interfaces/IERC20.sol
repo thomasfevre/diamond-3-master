@@ -76,4 +76,11 @@ interface IERC20 {
      * Emits a {Transfer} event.
      */
     function transferFrom(address from, address to, uint256 value) external returns (bool);
+
+    /**
+     * @dev Creates a `value` amount of tokens and assigns them to `account`, by transferring it from address(0).
+     *
+     * Emits a {Transfer} event with `from` set to the zero address.
+     */
+    function mint(address account, uint256 value) external;
 }

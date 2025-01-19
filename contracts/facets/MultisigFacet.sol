@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../libraries/LibMultisigStorage.sol";
 import "../interfaces/IERC20.sol";
+import "forge-std/console.sol";
 
 contract MultisigFacet {
     uint constant public MAX_OWNER_COUNT = 50;
@@ -149,6 +150,10 @@ contract MultisigFacet {
     // Additional view functions can be added here
     function getSigners(uint transactionId) external view returns (address[] memory) {
         return LibMultisigStorage.layout().confirmationSigners[transactionId];
+    }
+
+    function getErc20Address() external view returns (address) {
+        return LibMultisigStorage.layout().erc20Address;
     }
 
     function getTransactionCount(bool pending, bool executed) external view returns (uint count) {

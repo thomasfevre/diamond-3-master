@@ -9,6 +9,7 @@ import "../contracts/facets/OwnershipFacet.sol";
 import "../contracts/facets/MultisigFacet.sol";
 import "../contracts/interfaces/IDiamondCut.sol";
 import "../contracts/interfaces/IERC20.sol";
+import "../contracts/MyToken.sol";
 
 // Test Facet for adding during tests
 contract TestFacet {
@@ -30,7 +31,7 @@ contract DiamondCutMultisigTest is Test {
     address owner3;
     address nonOwner;
     address zeroAddress = address(0);
-    IERC20 testToken; // Added for ERC20 token interaction
+    MyToken testToken; // Added for ERC20 token interaction
 
     function setUp() public {
         owner = address(this);
@@ -44,11 +45,6 @@ contract DiamondCutMultisigTest is Test {
         diamondLoupeFacet = new DiamondLoupeFacet();
         ownershipFacet = new OwnershipFacet();
         multisigFacet = new MultisigFacet();
-
-        // Initialize Diamond arguments
-        Diamond.DiamondArgs memory diamondArgs = Diamond.DiamondArgs({
-            owner: owner
-        });
 
         // Create FacetCut array for initialization
         IDiamondCut.FacetCut[] memory diamondCut = new IDiamondCut.FacetCut[](3);
@@ -81,15 +77,17 @@ contract DiamondCutMultisigTest is Test {
         diamond = new Diamond(diamondCut);
 
         // Initialize Multisig with ERC20 token
-        testToken = new TestToken(); // Deploy a test ERC20 token
+        testToken = new MyToken(); // Deploy a test ERC20 token
         // add tokens to users 
-        testToken.transfer(owner1, 50);
-        testToken.transfer(owner2, 50);
-        multisigFacet.initializeMultisig(address(testToken), 2); // Set required confirmations
+        testToken.mint(owner1, 50);
+        testToken.mint(owner2, 50);
 
         // Initialize Facets
         diamondCutFacet = DiamondCutFacet(address(diamond));
         diamondLoupeFacet = DiamondLoupeFacet(address(diamond));
+        multisigFacet = MultisigFacet(address(diamond));
+        multisigFacet.initializeMultisig(address(testToken), 51); // Set required confirmations
+
     }
 
     function getInitialOwners() internal view returns (address[] memory) {
@@ -119,14 +117,26 @@ contract DiamondCutMultisigTest is Test {
     }
 
     function getMultisigFacetSelectors() internal view returns (bytes4[] memory) {
-        bytes4[] memory selectors = new bytes4[](6);
+        bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = multisigFacet.initializeMultisig.selector;
         selectors[1] = multisigFacet.submitTransaction.selector;
         selectors[2] = multisigFacet.confirmTransaction.selector;
         selectors[3] = multisigFacet.executeTransaction.selector;
         selectors[4] = multisigFacet.getSigners.selector;
-        selectors[5] = multisigFacet.getTransactionCount.selector;
+        selectors[5] = multisigFacet.getErc20Address.selector;
+        selectors[6] = multisigFacet.getTransactionCount.selector;
         return selectors;
+    }
+
+    function testErc20Interaction() public {
+        vm.prank(owner1);
+        uint256 balance = testToken.balanceOf(owner1);
+        assert(balance == 50);
+
+        // check multisig erc address
+        vm.prank(owner1);
+        address erc20Address = multisigFacet.getErc20Address();
+        assert(erc20Address == address(testToken));
     }
 
     function testSubmitDiamondCutProposal() public {
@@ -272,55 +282,5 @@ contract DiamondCutMultisigTest is Test {
         vm.prank(owner1);
         vm.expectRevert("DiamondCutFacet: Proposal already executed");
         diamondCutFacet.executeDiamondCutProposal(proposalId);
-    }
-}
-
-// Simple ERC20 token for testing
-contract TestToken is IERC20 {
-    string public name = "TestToken";
-    string public symbol = "TTK";
-    uint8 public decimals = 18;
-    uint256 public _totalSupply = 1000 * 10 ** uint256(decimals);
-    mapping(address => uint256) public _balanceOf;
-    mapping(address => mapping(address => uint256)) public _allowance;
-
-    constructor() {
-        _balanceOf[msg.sender] = _totalSupply; // Assign total supply to contract creator
-    }
-
-    function transfer(address to, uint256 value) external returns (bool) {
-        require(_balanceOf[msg.sender] >= value, "Insufficient balance");
-        _balanceOf[msg.sender] -= value;
-        _balanceOf[to] += value;
-        emit Transfer(msg.sender, to, value);
-        return true;
-    }
-
-    function approve(address spender, uint256 value) external returns (bool) {
-        _allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        require(_balanceOf[from] >= value, "Insufficient balance");
-        require(_allowance[from][msg.sender] >= value, "_allowance exceeded");
-        _balanceOf[from] -= value;
-        _balanceOf[to] += value;
-        _allowance[from][msg.sender] -= value;
-        emit Transfer(from, to, value);
-        return true;
-    }
-
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) external view returns (uint256) {
-        return _balanceOf[account];
-    }
-
-    function allowance(address owner, address spender) external view returns (uint256) {
-        return _allowance[owner][spender];
     }
 }
